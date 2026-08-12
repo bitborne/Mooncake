@@ -130,6 +130,14 @@ std::string Environ::GetString(const char* name,
     return ReadString(GetOsEnvironSource(), name, default_value);
 }
 
+std::optional<std::string> Environ::GetOptionalString(const char* name) {
+    const char* value = GetOsEnvironSource().Get(name);
+    if (value == nullptr) {
+        return std::nullopt;
+    }
+    return std::string(value);
+}
+
 Environ::Environ(const EnvironSource& source) {
     const uint32_t hardware_threads =
         static_cast<uint32_t>(std::thread::hardware_concurrency());

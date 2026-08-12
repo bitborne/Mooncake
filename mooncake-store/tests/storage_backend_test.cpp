@@ -7,11 +7,14 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <ranges>
+#include <string>
 #include <thread>
 #include <atomic>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 #include <mutex>
 #include <fcntl.h>
 #include <unistd.h>
@@ -23,6 +26,31 @@
 
 namespace fs = std::filesystem;
 namespace mooncake::test {
+
+class ScopedEnvVar {
+   public:
+    explicit ScopedEnvVar(const char* name) : name_(name) {
+        const char* value = std::getenv(name);
+        if (value != nullptr) {
+            original_ = value;
+        }
+        unsetenv(name);
+    }
+
+    ~ScopedEnvVar() {
+        if (original_.has_value()) {
+            setenv(name_.c_str(), original_->c_str(), 1);
+        } else {
+            unsetenv(name_.c_str());
+        }
+    }
+
+    void Set(const char* value) { setenv(name_.c_str(), value, 1); }
+
+   private:
+    std::string name_;
+    std::optional<std::string> original_;
+};
 
 class StorageBackendTest : public ::testing::Test {
    protected:
@@ -187,6 +215,70 @@ TEST_F(StorageBackendTest, CreateAcceptsValidConfig) {
     auto result = StorageBackend::Create(data_path, "fsdir", true);
     ASSERT_TRUE(result.has_value());
     EXPECT_NE(result.value(), nullptr);
+}
+
+TEST_F(StorageBackendTest, OffsetAllocatorConfigReadsEnvironment) {
+    ScopedEnvVar policy("MOONCAKE_OFFSET_EVICTION_POLICY");
+    ScopedEnvVar high_ratio("MOONCAKE_OFFSET_HIGH_RATIO");
+    ScopedEnvVar low_ratio("MOONCAKE_OFFSET_LOW_RATIO");
+    ScopedEnvVar max_nodes("MOONCAKE_OFFSET_MAX_CAPACITY_NODES");
+    ScopedEnvVar max_evict("MOONCAKE_OFFSET_MAX_EVICT_PER_OFFLOAD");
+    ScopedEnvVar persist_mode("MOONCAKE_OFFSET_PERSIST_MODE");
+    ScopedEnvVar persist_interval("MOONCAKE_OFFSET_PERSIST_INTERVAL_SECONDS");
+    ScopedEnvVar record_crc("MOONCAKE_OFFSET_RECORD_CRC");
+
+    policy.Set("FiFo");
+    high_ratio.Set("0.75");
+    low_ratio.Set("0.50");
+    max_nodes.Set("123");
+    max_evict.Set("17");
+    persist_mode.Set("ReLaXeD");
+    persist_interval.Set("10");
+    record_crc.Set("false");
+
+    const auto config = OffsetAllocatorBackendConfig::FromEnvironment();
+    EXPECT_EQ(config.eviction_policy, OffsetEvictionPolicy::FIFO);
+    EXPECT_DOUBLE_EQ(config.high_ratio, 0.75);
+    EXPECT_DOUBLE_EQ(config.low_ratio, 0.50);
+    EXPECT_DOUBLE_EQ(config.keys_high_ratio, 0.75);
+    EXPECT_DOUBLE_EQ(config.keys_low_ratio, 0.50);
+    EXPECT_EQ(config.max_capacity_nodes, 123);
+    EXPECT_EQ(config.max_evict_per_offload, 17);
+    EXPECT_EQ(config.persist_mode, OffsetPersistMode::kRelaxed);
+    EXPECT_EQ(config.persist_interval_seconds, 10);
+    EXPECT_FALSE(config.enable_record_crc);
+}
+
+TEST_F(StorageBackendTest, OffsetAllocatorConfigKeepsDefaultsForInvalidValues) {
+    ScopedEnvVar policy("MOONCAKE_OFFSET_EVICTION_POLICY");
+    ScopedEnvVar high_ratio("MOONCAKE_OFFSET_HIGH_RATIO");
+    ScopedEnvVar low_ratio("MOONCAKE_OFFSET_LOW_RATIO");
+    ScopedEnvVar max_nodes("MOONCAKE_OFFSET_MAX_CAPACITY_NODES");
+    ScopedEnvVar max_evict("MOONCAKE_OFFSET_MAX_EVICT_PER_OFFLOAD");
+    ScopedEnvVar persist_mode("MOONCAKE_OFFSET_PERSIST_MODE");
+    ScopedEnvVar persist_interval("MOONCAKE_OFFSET_PERSIST_INTERVAL_SECONDS");
+    ScopedEnvVar record_crc("MOONCAKE_OFFSET_RECORD_CRC");
+
+    policy.Set("");
+    high_ratio.Set("not-a-ratio");
+    low_ratio.Set("");
+    max_nodes.Set("not-an-integer");
+    max_evict.Set("-1");
+    persist_mode.Set("unknown");
+    persist_interval.Set("not-an-integer");
+    record_crc.Set("unknown");
+
+    const auto config = OffsetAllocatorBackendConfig::FromEnvironment();
+    EXPECT_EQ(config.eviction_policy, OffsetEvictionPolicy::NONE);
+    EXPECT_DOUBLE_EQ(config.high_ratio, 0.90);
+    EXPECT_DOUBLE_EQ(config.low_ratio, 0.80);
+    EXPECT_DOUBLE_EQ(config.keys_high_ratio, 0.90);
+    EXPECT_DOUBLE_EQ(config.keys_low_ratio, 0.80);
+    EXPECT_EQ(config.max_capacity_nodes, 0);
+    EXPECT_EQ(config.max_evict_per_offload, 4096);
+    EXPECT_EQ(config.persist_mode, OffsetPersistMode::kDisabled);
+    EXPECT_EQ(config.persist_interval_seconds, 60);
+    EXPECT_TRUE(config.enable_record_crc);
 }
 
 // Regression tests for StorageBackendAdaptor::Init validation (issue #3134

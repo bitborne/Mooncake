@@ -162,10 +162,10 @@ bool OffsetAllocatorBackendConfig::Validate() const {
 }
 
 static std::optional<double> GetEnvDouble(const char* name) {
-    const char* env = std::getenv(name);
-    if (!env || env[0] == '\0') return std::nullopt;
+    const auto env = Environ::GetOptionalString(name);
+    if (!env.has_value() || env->empty()) return std::nullopt;
     try {
-        return std::stod(env);
+        return std::stod(*env);
     } catch (...) {
         return std::nullopt;
     }
@@ -174,9 +174,10 @@ static std::optional<double> GetEnvDouble(const char* name) {
 OffsetAllocatorBackendConfig OffsetAllocatorBackendConfig::FromEnvironment() {
     OffsetAllocatorBackendConfig cfg;
 
-    const char* pol = std::getenv("MOONCAKE_OFFSET_EVICTION_POLICY");
-    if (pol) {
-        if (AsciiCaseInsensitiveEquals(pol, "fifo")) {
+    const auto policy =
+        Environ::GetOptionalString("MOONCAKE_OFFSET_EVICTION_POLICY");
+    if (policy.has_value()) {
+        if (AsciiCaseInsensitiveEquals(*policy, "fifo")) {
             cfg.eviction_policy = OffsetEvictionPolicy::FIFO;
         }
         // NONE is default; LRU reserved for phase 2
@@ -206,9 +207,10 @@ OffsetAllocatorBackendConfig OffsetAllocatorBackendConfig::FromEnvironment() {
     }
 
     // Persistence mode
-    const char* persist = std::getenv("MOONCAKE_OFFSET_PERSIST_MODE");
-    if (persist) {
-        std::string s(persist);
+    const auto persist =
+        Environ::GetOptionalString("MOONCAKE_OFFSET_PERSIST_MODE");
+    if (persist.has_value()) {
+        const std::string& s = *persist;
         if (AsciiCaseInsensitiveEquals(s, "disabled")) {
             cfg.persist_mode = OffsetPersistMode::kDisabled;
         } else if (AsciiCaseInsensitiveEquals(s, "relaxed")) {
@@ -226,9 +228,10 @@ OffsetAllocatorBackendConfig OffsetAllocatorBackendConfig::FromEnvironment() {
                           cfg.persist_interval_seconds);
 
     // Record CRC-32C: "0"/"false"/"off" disables per-record checksums.
-    const char* crc_env = std::getenv("MOONCAKE_OFFSET_RECORD_CRC");
-    if (crc_env) {
-        const auto parsed = TryParseBool(crc_env);
+    const auto crc_env =
+        Environ::GetOptionalString("MOONCAKE_OFFSET_RECORD_CRC");
+    if (crc_env.has_value()) {
+        const auto parsed = TryParseBool(*crc_env);
         if (parsed.has_value() && !*parsed) {
             cfg.enable_record_crc = false;
         }

@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <cstdlib>
+#include <optional>
 
 namespace mooncake {
 
@@ -104,6 +105,9 @@ class Environ {
     // Helper method to get string from env
     static std::string GetString(const char* name,
                                  const std::string& default_value);
+    // Helper method to get an optional raw string from env. An unset variable
+    // returns nullopt; an explicitly empty variable returns an empty string.
+    static std::optional<std::string> GetOptionalString(const char* name);
 
    private:
     // Member variables

@@ -18,6 +18,7 @@
 
 #include <climits>
 #include <cstdlib>
+#include <optional>
 
 using mooncake::Environ;
 
@@ -279,6 +280,18 @@ TEST_F(EnvironTest, GetStringEmpty) {
 TEST_F(EnvironTest, GetStringWithSpaces) {
     setenv("MC_TEST_STRING", "hello world", 1);
     EXPECT_EQ(Environ::GetString("MC_TEST_STRING", ""), "hello world");
+}
+
+TEST_F(EnvironTest, GetOptionalStringDistinguishesMissingAndEmpty) {
+    EXPECT_FALSE(Environ::GetOptionalString("MC_TEST_STRING").has_value());
+
+    setenv("MC_TEST_STRING", "", 1);
+    const auto empty = Environ::GetOptionalString("MC_TEST_STRING");
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_TRUE(empty->empty());
+
+    setenv("MC_TEST_STRING", "hello", 1);
+    EXPECT_EQ(Environ::GetOptionalString("MC_TEST_STRING"), "hello");
 }
 
 int main(int argc, char** argv) {
