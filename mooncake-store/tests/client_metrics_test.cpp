@@ -40,6 +40,16 @@ int GetTestPort(std::unordered_set<int>& used_ports) {
     return -1;
 }
 
+size_t CountOccurrences(const std::string& value, const std::string& needle) {
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = value.find(needle, pos)) != std::string::npos) {
+        ++count;
+        pos += needle.size();
+    }
+    return count;
+}
+
 class ScopedEnv {
    public:
     explicit ScopedEnv(const char* name) : name_(name) {
@@ -160,6 +170,45 @@ TEST_F(ClientMetricsTest, MasterClientMetricsSummaryTest) {
     EXPECT_TRUE(summary.find("max<") != std::string::npos);
 
     std::cout << "Master Client Metrics Summary:\n" << summary << std::endl;
+}
+
+TEST_F(ClientMetricsTest, SerializeHistogramBucketsOncePerLabel) {
+    MasterClientMetric metrics;
+    const std::array<std::string, 1> first_label = {"FetchTasks"};
+    const std::array<std::string, 1> second_label = {"Ping"};
+
+    metrics.rpc_latency.observe(first_label, 200);
+    metrics.rpc_latency.observe(second_label, 200);
+
+    std::string serialized;
+    metrics.serialize(serialized);
+
+    EXPECT_EQ(CountOccurrences(
+                  serialized,
+                  "mooncake_client_rpc_latency_bucket{rpc_name=\"FetchTasks\""),
+              kLatencyBucket.size() + 1);
+    EXPECT_EQ(
+        CountOccurrences(
+            serialized, "mooncake_client_rpc_latency_bucket{rpc_name=\"Ping\""),
+        kLatencyBucket.size() + 1);
+}
+
+TEST_F(ClientMetricsTest, SerializeZeroValuedHistogramDoesNotClearMetrics) {
+    MasterClientMetric metrics;
+    const std::array<std::string, 1> label = {"FetchTasks"};
+
+    metrics.rpc_count.inc(label);
+    metrics.rpc_latency.observe(label, 0);
+
+    std::string serialized;
+    metrics.serialize(serialized);
+
+    EXPECT_NE(serialized.find("mooncake_client_rpc_count"), std::string::npos);
+    EXPECT_NE(
+        serialized.find("mooncake_client_rpc_count{rpc_name=\"FetchTasks\"} 1"),
+        std::string::npos);
+    EXPECT_EQ(serialized.find("mooncake_client_rpc_latency"),
+              std::string::npos);
 }
 
 TEST_F(ClientMetricsTest, ClientMetricsSummaryTest) {

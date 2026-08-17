@@ -289,8 +289,6 @@ class basic_hybrid_histogram : public dynamic_metric {
             return;
         }
 
-        serialize_head(str);
-
         std::string value_str;
         auto bucket_counts = get_bucket_counts();
         for (auto& e : value_map) {
@@ -323,27 +321,28 @@ class basic_hybrid_histogram : public dynamic_metric {
                 value_str.append("\n");
             }
 
-            str.append(value_str);
-
             std::string labels_str;
             build_label_string_with_static(labels_str, sum_->labels_name(),
                                            labels_value);
 
-            str.append(name_);
-            str.append("_sum{");
-            str.append(labels_str);
-            str.append("} ");
-            str.append(std::to_string(value));
-            str.append("\n");
-            str.append(name_).append("_count{");
-            str.append(labels_str);
-            str.append("} ");
-            str.append(std::to_string(count));
-            str.append("\n");
+            value_str.append(name_);
+            value_str.append("_sum{");
+            value_str.append(labels_str);
+            value_str.append("} ");
+            value_str.append(std::to_string(value));
+            value_str.append("\n");
+            value_str.append(name_).append("_count{");
+            value_str.append(labels_str);
+            value_str.append("} ");
+            value_str.append(std::to_string(count));
+            value_str.append("\n");
         }
         if (value_str.empty()) {
-            str.clear();
+            return;
         }
+
+        serialize_head(str);
+        str.append(value_str);
     }
 
     void build_label_string_with_static(
