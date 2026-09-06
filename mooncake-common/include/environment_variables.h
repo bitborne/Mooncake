@@ -100,6 +100,13 @@ struct ReplicaSelectionEnvironmentVariables {
     MC_DEFINE_ENV_VAR(std::string, MC_STORE_REPLICA_SCORING);
 };
 
+struct ClientAutoDiscoveryEnvironmentVariables {
+    // Keep the raw strings to preserve std::stoi prefix acceptance and the
+    // distinction between unset and explicitly empty filter values.
+    MC_DEFINE_ENV_VAR(std::string, MC_MS_AUTO_DISC);
+    MC_DEFINE_ENV_VAR(std::string, MC_MS_FILTERS);
+};
+
 #undef MC_DEFINE_ENV_VAR
 
 }  // namespace mooncake
