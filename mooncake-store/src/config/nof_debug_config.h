@@ -5,7 +5,7 @@
 namespace mooncake {
 
 struct NoFDebugConfig {
-    bool enabled = false;
+    bool enabled{false};
     std::chrono::milliseconds interval_ms{1000};
 
     static bool IsEnabledAtFirstUse();
